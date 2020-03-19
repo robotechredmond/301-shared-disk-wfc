@@ -1,0 +1,461 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"namePrefix": {
+			"type": "string",
+            "minLength": 3,
+            "maxLength": 8,
+            "metadata": {
+                "description": "Naming prefix for each new resource created. 3-char min, 8-char max, lowercase alphanumeric"
+            }
+		},
+		"adminUsername": {
+			"type": "string",
+            "metadata": {
+                "description": "Name of the Administrator of the existing Active Directory Domain"
+            }
+		},
+		"adminPassword": {
+			"type": "securestring",
+            "minLength": 12,
+            "metadata": {
+                "description": "Password for the Administrator account of the existing Active Directory Domain"
+            }
+		},
+        "domainName" : {
+            "type": "string",
+            "metadata": {
+                "description": "DNS domain name for existing Active Directory domain"
+            }
+        },
+		"subnetUri": {
+			"type": "string",
+            "metadata": {
+                "description": "Resource ID for existing Virtual Network subnet to which VM NICs should be attached"
+            },
+            "defaultValue": "/subscriptions/35481b74-e090-40a8-888b-42bc552d8369/resourceGroups/kem-cluster-test-0/providers/Microsoft.Network/virtualNetworks/vnet0/subnets/cluster"
+		},
+		"vmSize": {
+			"type": "string",
+            "metadata": {
+                "description": "Size of the cluster node VMs to be created"
+            },
+            "defaultValue": "Standard_D2s_v3"
+		},
+        "enableAcceleratedNetworking": {
+            "type": "bool",
+            "metadata": {
+                "description": "Enable (true) or Disable (false) Accelerated Networking - if enabling, make sure you are selecting appropriate VM Size and Region"
+            }
+        },
+        "dataDiskSizeGB": {
+            "type": "int",
+            "minValue": 256,
+            "maxValue": 32767,
+            "metadata": {
+                "description": "Size of shared data disk for cluster (Min=128, Max=1023)"
+            },
+            "defaultValue": 1023
+        },
+        "_artifactsLocation": {
+			"type": "string",
+            "defaultValue": "https://raw.githubusercontent.com/robotechredmond/301-shared-disk-wfc/master"
+		},
+		"_artifactsLocationSasToken": {
+			"type": "string",
+            "defaultValue": ""
+		}
+	},
+	"variables": {
+        "ppgName": "[concat(parameters('namePrefix'),'-ppg')]",
+        "asName": "[concat(parameters('namePrefix'),'-as')]",
+        "asPlatformFaultDomainCount": 1,
+        "asPlatformUpdateDomainCount": 1,
+        "asSkuName": "Aligned",
+        "diskName": "[concat(parameters('namePrefix'),'-disk0')]",
+        "diskMaxShares": 2,
+        "witnessStorageName": "[concat(parameters('namePrefix'),'w',uniqueString(resourceGroup().name))]",
+        "witnessStorageType": "Standard_LRS",
+        "ilbName": "[concat(parameters('namePrefix'),'-ilb')]",
+        "ilbListenPortStart": 80,
+        "ilbListenPortEnd": 80,
+        "ilbProbePort": 59999,
+        "snatPipName": "[concat(parameters('namePrefix'),'-snatpip')]",
+        "snatLbName": "[concat(parameters('namePrefix'),'-snatlb')]",
+        "vmCount": 2,
+        "vmImagePublisher": "MicrosoftWindowsServer",
+        "vmImageOffer": "WindowsServer",
+        "vmImageSku": "2019-Datacenter",
+        "vmImageVersion": "latest",
+        "clusterPrepModulesURL": "[concat(parameters('_artifactsLocation'),'/dsc/PrepareClusterNode.ps1.zip',parameters('_artifactsLocationSasToken'))]",
+        "clusterPrepFunction": "PrepareClusterNode.ps1\\PrepareClusterNode"
+	},
+	"resources": [
+        {
+            "name": "[variables('ppgName')]",
+            "type": "Microsoft.Compute/proximityPlacementGroups",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-03-01",
+            "tags": {}
+        },
+		{
+            "name": "[variables('asName')]",
+            "type": "Microsoft.Compute/availabilitySets",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-07-01",
+            "dependsOn": [
+                "[variables('ppgName')]"
+            ],
+            "properties": {
+                "platformFaultDomainCount": "[variables('asPlatformFaultDomainCount')]",
+                "platformUpdateDomainCount": "[variables('asplatformUpdateDomainCount')]",
+                "proximityPlacementGroup": {
+                    "id": "[resourceId('Microsoft.Compute/proximityPlacementGroups', variables('ppgName'))]"
+                }
+            },
+            "sku": {
+                "name": "[variables('asSkuName')]"
+            },
+            "tags": {}
+        },
+        {
+            "name": "[variables('diskName')]",
+            "type": "Microsoft.Compute/disks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-07-01",
+            "sku": {
+            "name": "Premium_LRS"
+            },
+            "properties": {
+            "creationData": {
+                "createOption": "Empty"
+            },
+            "diskSizeGB": "[parameters('dataDiskSizeGB')]",
+            "maxShares": "[variables('diskMaxShares')]"
+            },
+            "tags": {}
+        },
+        {
+            "name": "[variables('witnessStorageName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-06-01",
+            "sku": {
+                "name": "[variables('witnessStorageType')]"
+            },
+            "kind": "Storage",
+            "tags": {}
+        },
+		{
+            "name": "[variables('ilbName')]",
+            "type": "Microsoft.Network/loadBalancers",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-11-01",
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "feIpConfig0",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[parameters('subnetUri')]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "bePool0"
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "rule0",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/frontendIPConfigurations/feIpConfig0')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/backendAddressPools/bePool0')]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/probes/probe0')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": "[variables('ilbListenPortStart')]",
+                            "backendPort": "[variables('ilbListenPortEnd')]",
+                            "enableFloatingIP": true
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "probe0",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": "[variables('ilbProbePort')]",
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ]
+            },
+            "tags": {}
+        },
+        {
+            "name": "[variables('snatPipName')]",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-11-01",
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Static",
+                "idleTimeoutInMinutes": 4
+            },
+            "tags": {}
+        },
+        {
+            "name": "[variables('snatLbName')]",
+            "type": "Microsoft.Network/loadBalancers",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-11-01",
+            "dependsOn": [
+                "[variables('snatPipName')]"
+            ],
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "feIpConfig0",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('snatPipName'))]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "bePool0"
+                    }
+                ],
+                "loadBalancingRules": [],
+                "probes": [],
+                "inboundNatRules": [],
+                "outboundRules": [
+                    {
+                        "name": "rule0",
+                        "properties": {
+                            "allocatedOutboundPorts": 0,
+                            "protocol": "All",
+                            "enableTcpReset": true,
+                            "idleTimeoutInMinutes": 4,
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('snatLbName')), '/backendAddressPools/bePool0')]"
+                            },
+                            "frontendIPConfigurations": [
+                                {
+                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers', variables('snatLbName')), '/frontendIPConfigurations/feIpConfig0')]"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            "tags": {}
+        },
+		{
+			"name": "[concat(parameters('namePrefix'), copyindex(), '-nic')]",
+			"type": "Microsoft.Network/networkInterfaces",
+			"location": "[resourceGroup().location]",
+			"apiVersion": "2019-11-01",
+			"copy": {
+				"name": "nicLoop",
+				"count": "[variables('vmCount')]"
+			},
+			"dependsOn": [
+				"[variables('ilbName')]",
+                "[variables('snatLbName')]"
+			],
+			"properties": {
+				"ipConfigurations": [
+					{
+						"name": "ipconfig0",
+						"properties": {
+							"privateIPAllocationMethod": "Dynamic",
+							"subnet": {
+								"id": "[parameters('subnetUri')]"
+							},
+							"loadBalancerBackendAddressPools": [
+								{
+									"id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/backendAddressPools/bePool0')]"
+								},
+                                {
+									"id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('snatLbName')),'/backendAddressPools/bePool0')]"
+								}
+							]
+						}
+					}
+				],
+                "enableAcceleratedNetworking": "[parameters('enableAcceleratedNetworking')]"
+			},
+            "tags": {}
+		},
+		{
+			"name": "[concat(parameters('namePrefix'), '0')]",
+			"type": "Microsoft.Compute/virtualMachines",
+			"location": "[resourceGroup().location]",
+            "apiVersion": "2019-07-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '0', '-nic'))]",
+				"[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]",
+                "[resourceId('Microsoft.Compute/disks', variables('diskName'))]"
+			],
+			"properties": {
+				"hardwareProfile": {
+					"vmSize": "[parameters('vmSize')]"
+				},
+				"availabilitySet": {
+					"id": "[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]"
+				},
+				"osProfile": {
+					"computerName": "[concat(parameters('namePrefix'), '0')]",
+					"adminUsername": "[parameters('adminUsername')]",
+					"adminPassword": "[parameters('adminPassword')]"
+				},
+				"storageProfile": {
+					"imageReference": {
+						"publisher": "[variables('vmImagePublisher')]",
+						"offer": "[variables('vmImageOffer')]",
+						"sku": "[variables('vmImageSKU')]",
+						"version": "[variables('vmImageVersion')]"
+					},
+					"osDisk": {
+						"name": "[concat(parameters('namePrefix'), '0', '-osdisk')]",
+						"caching": "ReadWrite",
+						"createOption": "FromImage"
+					},
+					"dataDisks": [
+                        {
+                            "lun": 0,
+                            "name": "[variables('diskName')]",
+                            "createOption": "attach",
+                            "managedDisk": {
+                                "id": "[resourceId('Microsoft.Compute/disks/', variables('diskName'))]"
+                            }
+                        }
+                    ]
+				},
+				"networkProfile": {
+					"networkInterfaces": [
+						{
+							"id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '0', '-nic'))]"
+						}
+					]
+				}
+			},
+            "tags": {}
+		},
+		{
+			"name": "[concat(parameters('namePrefix'), '1')]",
+			"type": "Microsoft.Compute/virtualMachines",
+			"location": "[resourceGroup().location]",
+            "apiVersion": "2019-07-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '1', '-nic'))]",
+				"[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]",
+                "[resourceId('Microsoft.Compute/disks', variables('diskName'))]",
+                "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('namePrefix'), '0'))]"
+			],
+			"properties": {
+				"hardwareProfile": {
+					"vmSize": "[parameters('vmSize')]"
+				},
+				"availabilitySet": {
+					"id": "[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]"
+				},
+				"osProfile": {
+					"computerName": "[concat(parameters('namePrefix'), '1')]",
+					"adminUsername": "[parameters('adminUsername')]",
+					"adminPassword": "[parameters('adminPassword')]"
+				},
+				"storageProfile": {
+					"imageReference": {
+						"publisher": "[variables('vmImagePublisher')]",
+						"offer": "[variables('vmImageOffer')]",
+						"sku": "[variables('vmImageSKU')]",
+						"version": "[variables('vmImageVersion')]"
+					},
+					"osDisk": {
+						"name": "[concat(parameters('namePrefix'), '1', '-osdisk')]",
+						"caching": "ReadWrite",
+						"createOption": "FromImage"
+					},
+					"dataDisks": [
+                        {
+                            "lun": 0,
+                            "name": "[variables('diskName')]",
+                            "createOption": "attach",
+                            "managedDisk": {
+                                "id": "[resourceId('Microsoft.Compute/disks/', variables('diskName'))]"
+                            }
+                        }
+                    ]
+				},
+				"networkProfile": {
+					"networkInterfaces": [
+						{
+							"id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '1', '-nic'))]"
+						}
+					]
+				}
+			},
+            "tags": {}
+		},
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(variables('namePrefix'),copyindex(1),'/PrepareClusterNode')]",
+            "apiVersion": "2019-07-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat(parameters('namePrefix'), sub(variables('vmCount'),1))]"
+            ],
+            "copy": {
+                "name": "vmExtensionLoop",
+                "count": "[sub(variables('vmCount'),1)]"
+            },
+            "properties": {
+                "publisher": "Microsoft.Powershell",
+                "type": "DSC",
+                "typeHandlerVersion": "2.9",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "modulesUrl": "[variables('clusterPrepModulesURL')]",
+                    "configurationFunction": "[variables('clusterPrepFunction')]",
+                    "properties": {
+                        "domainName": "[parameters('domainName')]",
+                        "adminCreds": {
+                            "userName": "[parameters('adminUserName')]",
+                            "password": "PrivateSettingsRef:adminPassword"
+                        }
+                    }
+                },
+                "protectedSettings": {
+                    "items": {
+                        "adminPassword": "[parameters('adminPassword')]"
+                    }
+                }
+            }
+        }
+	],
+	"outputs": {}
+}

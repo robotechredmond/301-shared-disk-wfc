@@ -47,7 +47,8 @@
             "type": "bool",
             "metadata": {
                 "description": "Enable (true) or Disable (false) Accelerated Networking - if enabling, make sure you are selecting appropriate VM Size and Region"
-            }
+            },
+            "defaultValue": false
         },
         "dataDiskSizeGB": {
             "type": "int",
@@ -84,12 +85,14 @@
         "snatPipName": "[concat(parameters('namePrefix'),'-snatpip')]",
         "snatLbName": "[concat(parameters('namePrefix'),'-snatlb')]",
         "vmCount": 2,
+        "vmLoopMode": "serial",
         "vmImagePublisher": "MicrosoftWindowsServer",
         "vmImageOffer": "WindowsServer",
         "vmImageSku": "2019-Datacenter",
         "vmImageVersion": "latest",
-        "clusterPrepModulesURL": "[concat(parameters('_artifactsLocation'),'/dsc/PrepareClusterNode.ps1.zip',parameters('_artifactsLocationSasToken'))]",
-        "clusterPrepFunction": "PrepareClusterNode.ps1\\PrepareClusterNode"
+        "clusterPrepURL": "[concat(parameters('_artifactsLocation'),'/dsc/PrepareClusterNode.ps1.zip')]",
+        "clusterPrepScript": "PrepareClusterNode.ps1",
+        "clusterPrepFunction": "PrepareClusterNode"
 	},
 	"resources": [
         {
@@ -310,41 +313,41 @@
 			},
             "tags": {}
 		},
-		{
-			"name": "[concat(parameters('namePrefix'), '0')]",
-			"type": "Microsoft.Compute/virtualMachines",
-			"location": "[resourceGroup().location]",
+        {
+            "type": "Microsoft.Compute/virtualMachines",
             "apiVersion": "2019-07-01",
-			"dependsOn": [
-				"[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '0', '-nic'))]",
-				"[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]",
+            "name": "[concat(parameters('namePrefix'), copyindex())]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), copyindex(), '-nic'))]",
+                "[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]",
                 "[resourceId('Microsoft.Compute/disks', variables('diskName'))]"
-			],
-			"properties": {
-				"hardwareProfile": {
-					"vmSize": "[parameters('vmSize')]"
-				},
-				"availabilitySet": {
-					"id": "[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]"
-				},
-				"osProfile": {
-					"computerName": "[concat(parameters('namePrefix'), '0')]",
-					"adminUsername": "[parameters('adminUsername')]",
-					"adminPassword": "[parameters('adminPassword')]"
-				},
-				"storageProfile": {
-					"imageReference": {
-						"publisher": "[variables('vmImagePublisher')]",
-						"offer": "[variables('vmImageOffer')]",
-						"sku": "[variables('vmImageSKU')]",
-						"version": "[variables('vmImageVersion')]"
-					},
-					"osDisk": {
-						"name": "[concat(parameters('namePrefix'), '0', '-osdisk')]",
-						"caching": "ReadWrite",
-						"createOption": "FromImage"
-					},
-					"dataDisks": [
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]"
+                },
+                "osProfile": {
+                    "computerName": "[concat(parameters('namePrefix'), copyindex())]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('vmImagePublisher')]",
+                        "offer": "[variables('vmImageOffer')]",
+                        "sku": "[variables('vmImageSKU')]",
+                        "version": "[variables('vmImageVersion')]"
+                    },
+                    "osDisk": {
+                        "name": "[concat(parameters('namePrefix'), copyindex(), '-osdisk')]",
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    },
+                    "dataDisks": [
                         {
                             "lun": 0,
                             "name": "[variables('diskName')]",
@@ -354,80 +357,28 @@
                             }
                         }
                     ]
-				},
-				"networkProfile": {
-					"networkInterfaces": [
-						{
-							"id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '0', '-nic'))]"
-						}
-					]
-				}
-			},
-            "tags": {}
-		},
-		{
-			"name": "[concat(parameters('namePrefix'), '1')]",
-			"type": "Microsoft.Compute/virtualMachines",
-			"location": "[resourceGroup().location]",
-            "apiVersion": "2019-07-01",
-			"dependsOn": [
-				"[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '1', '-nic'))]",
-				"[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]",
-                "[resourceId('Microsoft.Compute/disks', variables('diskName'))]",
-                "[resourceId('Microsoft.Compute/virtualMachines', concat(parameters('namePrefix'), '0'))]"
-			],
-			"properties": {
-				"hardwareProfile": {
-					"vmSize": "[parameters('vmSize')]"
-				},
-				"availabilitySet": {
-					"id": "[resourceId('Microsoft.Compute/availabilitySets', variables('asName'))]"
-				},
-				"osProfile": {
-					"computerName": "[concat(parameters('namePrefix'), '1')]",
-					"adminUsername": "[parameters('adminUsername')]",
-					"adminPassword": "[parameters('adminPassword')]"
-				},
-				"storageProfile": {
-					"imageReference": {
-						"publisher": "[variables('vmImagePublisher')]",
-						"offer": "[variables('vmImageOffer')]",
-						"sku": "[variables('vmImageSKU')]",
-						"version": "[variables('vmImageVersion')]"
-					},
-					"osDisk": {
-						"name": "[concat(parameters('namePrefix'), '1', '-osdisk')]",
-						"caching": "ReadWrite",
-						"createOption": "FromImage"
-					},
-					"dataDisks": [
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
                         {
-                            "lun": 0,
-                            "name": "[variables('diskName')]",
-                            "createOption": "attach",
-                            "managedDisk": {
-                                "id": "[resourceId('Microsoft.Compute/disks/', variables('diskName'))]"
-                            }
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), copyindex(), '-nic'))]"
                         }
                     ]
-				},
-				"networkProfile": {
-					"networkInterfaces": [
-						{
-							"id": "[resourceId('Microsoft.Network/networkInterfaces',concat(parameters('namePrefix'), '1', '-nic'))]"
-						}
-					]
-				}
-			},
-            "tags": {}
-		},
+                }
+            },
+            "copy": {
+                "name": "vmLoop",
+                "mode": "[variables('vmLoopMode')]",
+                "count": "[variables('vmCount')]"
+            }
+        },
         {
             "type": "Microsoft.Compute/virtualMachines/extensions",
             "name": "[concat(parameters('namePrefix'),copyindex(1),'/PrepareClusterNode')]",
             "apiVersion": "2019-07-01",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-                "[concat(parameters('namePrefix'), sub(variables('vmCount'),1))]"
+                "vmLoop"
             ],
             "copy": {
                 "name": "vmExtensionLoop",
@@ -436,23 +387,27 @@
             "properties": {
                 "publisher": "Microsoft.Powershell",
                 "type": "DSC",
-                "typeHandlerVersion": "2.9",
+                "typeHandlerVersion": "2.77",
                 "autoUpgradeMinorVersion": true,
                 "settings": {
-                    "modulesUrl": "[variables('clusterPrepModulesURL')]",
-                    "configurationFunction": "[variables('clusterPrepFunction')]",
-                    "properties": {
-                        "domainName": "[parameters('domainName')]",
-                        "adminCreds": {
-                            "userName": "[parameters('adminUserName')]",
-                            "password": "PrivateSettingsRef:adminPassword"
-                        }
+                    "wmfVersion": "latest",
+                    "configuration": {
+                        "url": "[variables('clusterPrepURL')]",
+                        "script": "[variables('clusterPrepScript')]",
+                        "function": "[variables('clusterPrepFunction')]"
+                    },
+                    "configurationArguments": {
+                        "domainName": "[parameters('domainName')]"
                     }
                 },
                 "protectedSettings": {
-                    "items": {
-                        "adminPassword": "[parameters('adminPassword')]"
-                    }
+                    "configurationArguments": {
+                        "adminCreds": {
+                            "userName": "[parameters('adminUsername')]",
+                            "password": "[parameters('adminPassword')]"
+                        }
+                    },
+                    "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
                 }
             }
         }

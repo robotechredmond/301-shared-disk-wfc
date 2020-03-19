@@ -96,7 +96,7 @@ configuration ConfigureCluster
             Name = $ClusterName
             DomainAdministratorCredential = $DomainCreds
             Nodes = $Nodes
-	        DependsOn = "[xComputer]DomainJoin"
+	        DependsOn = "[Computer]DomainJoin"
         }
 
         Script CloudWitness

@@ -418,7 +418,7 @@
         },
         {
             "type": "Microsoft.Compute/virtualMachines/extensions",
-            "name": "[concat(parameters('namePrefix'),copyindex(1),'/ConfigureCluster')]",
+            "name": "[concat(parameters('namePrefix'),'0/ConfigureCluster')]",
             "apiVersion": "2019-07-01",
             "location": "[resourceGroup().location]",
             "dependsOn": [

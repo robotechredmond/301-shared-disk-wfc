@@ -13,7 +13,7 @@ configuration PrepareClusterNode
         [System.Management.Automation.PSCredential]$AdminCreds
     )
 
-    Import-DscResource -ModuleName ComputerManagementDsc, ActiveDirectoryDsc
+    Import-DscResource -ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, ActiveDirectoryDsc
 
     [System.Management.Automation.PSCredential]$DomainCreds = New-Object System.Management.Automation.PSCredential ("${DomainNetbiosName}\$($Admincreds.UserName)", $Admincreds.Password)
    
@@ -59,7 +59,7 @@ configuration PrepareClusterNode
             Name = $env:COMPUTERNAME
             DomainName = $DomainName
             Credential = $DomainCreds
-            DependsOn = "[xWaitForADDomain]DscForestWait"
+            DependsOn = "[WaitForADDomain]DscForestWait"
         }
 
         LocalConfigurationManager 

@@ -78,6 +78,7 @@
         "diskMaxShares": 2,
         "witnessStorageName": "[concat(parameters('namePrefix'),'w',uniqueString(resourceGroup().name))]",
         "witnessStorageType": "Standard_LRS",
+        "apiVersionStorage": "2019-06-01",
         "ilbName": "[concat(parameters('namePrefix'),'-ilb')]",
         "ilbListenPortStart": 80,
         "ilbListenPortEnd": 80,
@@ -92,7 +93,11 @@
         "vmImageVersion": "latest",
         "clusterPrepURL": "[concat(parameters('_artifactsLocation'),'/dsc/PrepareClusterNode.ps1.zip')]",
         "clusterPrepScript": "PrepareClusterNode.ps1",
-        "clusterPrepFunction": "PrepareClusterNode"
+        "clusterPrepFunction": "PrepareClusterNode",
+        "clusterConfigURL": "[concat(parameters('_artifactsLocation'),'/dsc/ConfigureCluster.ps1.zip')]",
+        "clusterConfigScript": "ConfigureCluster.ps1",
+        "clusterConfigFunction": "ConfigureCluster",
+        "clusterName": "[concat(parameters('namePrefix'),'c')]"
 	},
 	"resources": [
         {
@@ -405,6 +410,51 @@
                         "adminCreds": {
                             "userName": "[parameters('adminUsername')]",
                             "password": "[parameters('adminPassword')]"
+                        }
+                    },
+                    "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('namePrefix'),copyindex(1),'/ConfigureCluster')]",
+            "apiVersion": "2019-07-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "vmExtensionLoop",
+                "[variables('witnessStorageName')]"
+            ],
+            "properties": {
+                "publisher": "Microsoft.Powershell",
+                "type": "DSC",
+                "typeHandlerVersion": "2.77",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "wmfVersion": "latest",
+                    "configuration": {
+                        "url": "[variables('clusterConfigURL')]",
+                        "script": "[variables('clusterConfigScript')]",
+                        "function": "[variables('clusterConfigFunction')]"
+                    },
+                    "configurationArguments": {
+                        "domainName": "[parameters('domainName')]",
+                        "clusterName": "[variables('clusterName')]",
+                        "namePrefix": "[parameters('namePrefix')]",
+                        "vmCount": "[variables('vmCount')]",
+                        "dataDiskSizeGB": "[parameters('dataDiskSizeGB')]",
+                        "witnessStorageName": "[variables('witnessStorageName')]"
+                    }
+                },
+                "protectedSettings": {
+                    "configurationArguments": {
+                        "adminCreds": {
+                            "userName": "[parameters('adminUsername')]",
+                            "password": "[parameters('adminPassword')]"
+                        },
+                        "witnessStorageKey": {
+                            "userName": "PLACEHOLDER-DO-NOT-USE",
+                            "password": "[listKeys(resourceId('Microsoft.Storage/storageAccounts',variables('witnessStorageName')),variables('apiVersionStorage')).keys[0].value]"
                         }
                     },
                     "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"

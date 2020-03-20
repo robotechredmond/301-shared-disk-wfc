@@ -45,7 +45,7 @@ configuration ConfigureCluster
     For ($count=1; $count -lt $VMCount; $count++) {
         $Nodes.Add($NamePrefix + $Count.ToString())
     }
-   
+  
     Node localhost
     {
 
@@ -121,7 +121,7 @@ configuration ConfigureCluster
 
         foreach ($Node in $Nodes)
         {
-            Script $Node
+            Script "AddClusterNode_${Node}"
             {
                 SetScript = "Add-ClusterNode -Name ${Node} -NoStorage"
                 TestScript = "'${Node}' -in (Get-ClusterNode).Name"
@@ -129,6 +129,22 @@ configuration ConfigureCluster
                 PsDscRunAsCredential = $DomainCreds
                 DependsOn = "[Script]IncreaseClusterTimeouts"
             }
+        }
+
+        Script FormatSharedDisks
+        {
+            SetScript = "Get-Disk | Where-Object PartitionStyle -eq 'RAW' | Initialize-Disk -PartitionStyle GPT -PassThru -ErrorAction SilentlyContinue | New-Partition -AssignDriveLetter -UseMaximumSize -ErrorAction SilentlyContinue | Format-Volume -FileSystem NTFS -Confirm:${false}"
+            TestScript = "(Get-Disk | Where-Object PartitionStyle -eq 'RAW').Count -eq 0"
+            GetScript = "@{Ensure = if ((Get-Disk | Where-Object PartitionStyle -eq 'RAW').Count -eq 0) {'Present'} else {'Absent'}}"
+            DependsOn = "[Script]AddClusterNode_${Nodes}[-1]"
+        }
+
+        Script AddClusterDisks
+        {
+            SetScript = "Get-ClusterAvailableDisk | Add-ClusterDisk"
+            TestScript = "(Get-ClusterAvailableDisk).Count -eq 0"
+            GetScript = "@{Ensure = if ((Get-ClusterAvailableDisk).Count -eq 0) {'Present'} else {'Absent'}}"
+            DependsOn = "[Script]FormatSharedDisks"
         }
 
         LocalConfigurationManager 

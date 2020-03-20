@@ -34,7 +34,12 @@ configuration ConfigureCluster
         [String]$ListenerIPAddress,
 
         [Parameter(Mandatory)]
-        [Int]$ListenerProbePort
+        [Int]$ListenerProbePort,
+
+        [String]$ClusterGroup = "${ClusterName}-group",
+
+        [String]$ClusterIPName = "IP Address ${ListenerIPAddress}"
+
     )
 
     Import-DscResource -ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, ActiveDirectoryDsc
@@ -145,6 +150,30 @@ configuration ConfigureCluster
             TestScript = "(Get-ClusterAvailableDisk).Count -eq 0"
             GetScript = "@{Ensure = if ((Get-ClusterAvailableDisk).Count -eq 0) {'Present'} else {'Absent'}}"
             DependsOn = "[Script]FormatSharedDisks"
+        }
+
+        Script AddClusterGroup
+        {
+            SetScript = "Add-ClusterGroup -Name '$ClusterGroup'"
+            TestScript = "'${ClusterGroup}' -in (Get-ClusterGroup).Name"
+            GetScript = "@{Ensure = if ('${ClusterGroup}' -in (Get-ClusterGroup).Name) {'Present'} else {'Absent'}}"
+            DependsOn = "[Script]AddClusterDisks"
+        }
+
+        Script AddClusterIPAddress
+        {
+            SetScript = "Add-ClusterResource -Name '${ClusterIpName}' -Group '${ClusterGroup}' -ResourceType 'IP Address' | Set-ClusterParameter -Multiple `@`{Address='${ListenerIpAddress}';ProbePort=${ListenerProbePort};SubnetMask='255.255.255.255';Network=(Get-ClusterNetwork)[0].Name;OverrideAddressMatch=1;EnableDhcp=0`}"
+            TestScript = "'${ClusterIPName}' -in (Get-ClusterResource).Name"
+            GetScript = "@{Ensure = if ('${ClusterIPName}' -in (Get-ClusterResource).Name) {'Present'} else {'Absent'}}"
+            DependsOn = "[Script]AddClusterGroup"
+        }
+
+        Script StartClusterGroup
+        {
+            SetScript = "Start-ClusterGroup -Name '$ClusterGroup'"
+            TestScript = "(Get-ClusterGroup -Name '$ClusterGroup').State -eq 'Online'"
+            GetScript = "@{Ensure = if ((Get-ClusterGroup -Name '$ClusterGroup').State -eq 'Online') {'Present'} else {'Absent'}}"
+            DependsOn = "[Script]AddClusterIPAddress"
         }
 
         LocalConfigurationManager 

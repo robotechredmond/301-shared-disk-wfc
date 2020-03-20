@@ -104,9 +104,7 @@
             "name": "[variables('ppgName')]",
             "type": "Microsoft.Compute/proximityPlacementGroups",
             "location": "[resourceGroup().location]",
-            "apiVersion": "2019-03-01",
-            "tags": {
-            }
+            "apiVersion": "2019-03-01"
         },
         {
             "name": "[variables('asName')]",
@@ -125,8 +123,6 @@
             },
             "sku": {
                 "name": "[variables('asSkuName')]"
-            },
-            "tags": {
             }
         },
         {
@@ -143,8 +139,6 @@
                 },
                 "diskSizeGB": "[parameters('dataDiskSizeGB')]",
                 "maxShares": "[variables('diskMaxShares')]"
-            },
-            "tags": {
             }
         },
         {
@@ -215,8 +209,6 @@
                         }
                     }
                 ]
-            },
-            "tags": {
             }
         },
         {
@@ -231,8 +223,6 @@
                 "publicIPAddressVersion": "IPv4",
                 "publicIPAllocationMethod": "Static",
                 "idleTimeoutInMinutes": 4
-            },
-            "tags": {
             }
         },
         {
@@ -287,8 +277,6 @@
                         }
                     }
                 ]
-            },
-            "tags": {
             }
         },
         {
@@ -325,8 +313,6 @@
                     }
                 ],
                 "enableAcceleratedNetworking": "[parameters('enableAcceleratedNetworking')]"
-            },
-            "tags": {
             }
         },
         {

@@ -113,9 +113,9 @@ configuration ConfigureCluster
             DependsOn = "[Script]CloudWitness"
         }
 
-        foreach $Node in $Nodes
+        foreach ($Node in $Nodes)
         {
-            Script AddClusterNode
+            Script $Node
             {
                 SetScript = "Add-ClusterNode -Name ${Node} -NoStorage"
                 TestScript = "${Node} -in (Get-ClusterNode).Name"

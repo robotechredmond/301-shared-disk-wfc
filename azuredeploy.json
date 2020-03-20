@@ -443,7 +443,9 @@
                         "namePrefix": "[parameters('namePrefix')]",
                         "vmCount": "[variables('vmCount')]",
                         "dataDiskSizeGB": "[parameters('dataDiskSizeGB')]",
-                        "witnessStorageName": "[variables('witnessStorageName')]"
+                        "witnessStorageName": "[variables('witnessStorageName')]",
+                        "listenerIPAddress": "[reference(variables('ilbName')).frontendIPConfigurations[0].properties.privateIPAddress]",
+                        "listenerProbePort": "[variables('ilbProbePort')]"
                     }
                 },
                 "protectedSettings": {

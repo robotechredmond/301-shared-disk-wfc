@@ -28,7 +28,13 @@ configuration ConfigureCluster
         [String]$WitnessStorageName,
 
         [Parameter(Mandatory)]
-        [System.Management.Automation.PSCredential]$WitnessStorageKey
+        [System.Management.Automation.PSCredential]$WitnessStorageKey,
+
+        [Parameter(Mandatory)]
+        [String]$ListenerIPAddress,
+
+        [Parameter(Mandatory)]
+        [Int]$ListenerProbePort
     )
 
     Import-DscResource -ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, ActiveDirectoryDsc
@@ -91,8 +97,8 @@ configuration ConfigureCluster
         Script CreateCluster
         {
             SetScript = "New-Cluster -Name ${ClusterName} -Node ${env:COMPUTERNAME} -NoStorage "
-            TestScript = "(Get-Cluster).Name -eq '${ClusterName}'"
-            GetScript = "@{Ensure = if ((Get-Cluster).Name -eq '${ClusterName}') {'Present'} else {'Absent'}}"
+            TestScript = "(Get-Cluster -ErrorAction SilentlyContinue).Name -eq '${ClusterName}'"
+            GetScript = "@{Ensure = if ((Get-Cluster -ErrorAction SilentlyContinue).Name -eq '${ClusterName}') {'Present'} else {'Absent'}}"
             PsDscRunAsCredential = $DomainCreds
 	        DependsOn = "[Computer]DomainJoin"
         }

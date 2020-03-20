@@ -149,9 +149,7 @@
             "sku": {
                 "name": "[variables('witnessStorageType')]"
             },
-            "kind": "Storage",
-            "tags": {
-            }
+            "kind": "Storage"
         },
         {
             "name": "[variables('ilbName')]",

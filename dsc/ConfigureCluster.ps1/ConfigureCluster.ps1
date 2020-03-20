@@ -91,8 +91,8 @@ configuration ConfigureCluster
         Script CreateCluster
         {
             SetScript = "New-Cluster -Name ${ClusterName} -Node ${env:COMPUTERNAME} -NoStorage "
-            TestScript = "(Get-Cluster).Name -eq ${ClusterName}"
-            GetScript = "@{Ensure = if ((Get-Cluster).Name -eq ${ClusterName}) {'Present'} else {'Absent'}}"
+            TestScript = "(Get-Cluster).Name -eq '${ClusterName}'"
+            GetScript = "@{Ensure = if ((Get-Cluster).Name -eq '${ClusterName}') {'Present'} else {'Absent'}}"
             PsDscRunAsCredential = $DomainCreds
 	        DependsOn = "[Computer]DomainJoin"
         }
@@ -118,8 +118,8 @@ configuration ConfigureCluster
             Script $Node
             {
                 SetScript = "Add-ClusterNode -Name ${Node} -NoStorage"
-                TestScript = "${Node} -in (Get-ClusterNode).Name"
-                GetScript = "@{Ensure = if (${Node} -in (Get-ClusterNode).Name) {'Present'} else {'Absent'}}"
+                TestScript = "'${Node}' -in (Get-ClusterNode).Name"
+                GetScript = "@{Ensure = if ('${Node}' -in (Get-ClusterNode).Name) {'Present'} else {'Absent'}}"
                 PsDscRunAsCredential = $DomainCreds
                 DependsOn = "[Script]IncreaseClusterTimeouts"
             }

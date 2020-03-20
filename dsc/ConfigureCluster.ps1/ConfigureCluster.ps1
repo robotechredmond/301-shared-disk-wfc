@@ -80,7 +80,7 @@ configuration ConfigureCluster
         WaitForADDomain DscForestWait 
         { 
             DomainName              = $DomainName 
-            Credential= $DomainCreds
+            Credential              = $DomainCreds
             WaitForValidCredentials = $True
             WaitTimeout             = 600
             RestartCount            = 3

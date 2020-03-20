@@ -32,15 +32,14 @@ configuration PrepareClusterNode
             Ensure = "Present"
         }
 
+        WindowsFeature FCCmd {
+            Name      = "RSAT-Clustering-CmdInterface"
+            Ensure    = "Present"
+        }
+
         WindowsFeature ADPS
         {
             Name = "RSAT-AD-PowerShell"
-            Ensure = "Present"
-        }
-
-        WindowsFeature FS
-        {
-            Name = "FS-FileServer"
             Ensure = "Present"
         }
 

@@ -1,48 +1,48 @@
 {
-	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-	"contentVersion": "1.0.0.0",
-	"parameters": {
-		"namePrefix": {
-			"type": "string",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "namePrefix": {
+            "type": "string",
             "minLength": 3,
             "maxLength": 8,
             "metadata": {
                 "description": "Naming prefix for each new resource created. 3-char min, 8-char max, lowercase alphanumeric"
             }
-		},
-		"adminUsername": {
-			"type": "string",
+        },
+        "adminUsername": {
+            "type": "string",
             "metadata": {
                 "description": "Name of the Administrator of the existing Active Directory Domain"
             }
-		},
-		"adminPassword": {
-			"type": "securestring",
+        },
+        "adminPassword": {
+            "type": "securestring",
             "minLength": 12,
             "metadata": {
                 "description": "Password for the Administrator account of the existing Active Directory Domain"
             }
-		},
-        "domainName" : {
+        },
+        "domainName": {
             "type": "string",
             "metadata": {
                 "description": "DNS domain name for existing Active Directory domain"
             }
         },
-		"subnetUri": {
-			"type": "string",
+        "subnetUri": {
+            "type": "string",
             "metadata": {
                 "description": "Resource ID for existing Virtual Network subnet to which VM NICs should be attached"
             },
             "defaultValue": "/subscriptions/{subscription-id}/resourceGroups/{resource-group-name}/providers/Microsoft.Network/virtualNetworks/{vnet-name}/subnets/{subnet-name}"
-		},
-		"vmSize": {
-			"type": "string",
+        },
+        "vmSize": {
+            "type": "string",
             "metadata": {
                 "description": "Size of the cluster node VMs to be created"
             },
             "defaultValue": "Standard_D2s_v3"
-		},
+        },
         "enableAcceleratedNetworking": {
             "type": "bool",
             "metadata": {
@@ -60,15 +60,15 @@
             "defaultValue": 1023
         },
         "_artifactsLocation": {
-			"type": "string",
+            "type": "string",
             "defaultValue": "https://raw.githubusercontent.com/robotechredmond/301-shared-disk-wfc/master"
-		},
-		"_artifactsLocationSasToken": {
-			"type": "string",
+        },
+        "_artifactsLocationSasToken": {
+            "type": "string",
             "defaultValue": ""
-		}
-	},
-	"variables": {
+        }
+    },
+    "variables": {
         "ppgName": "[concat(parameters('namePrefix'),'-ppg')]",
         "asName": "[concat(parameters('namePrefix'),'-as')]",
         "asPlatformFaultDomainCount": 1,
@@ -98,16 +98,17 @@
         "clusterConfigScript": "ConfigureCluster.ps1",
         "clusterConfigFunction": "ConfigureCluster",
         "clusterName": "[concat(parameters('namePrefix'),'c')]"
-	},
-	"resources": [
+    },
+    "resources": [
         {
             "name": "[variables('ppgName')]",
             "type": "Microsoft.Compute/proximityPlacementGroups",
             "location": "[resourceGroup().location]",
             "apiVersion": "2019-03-01",
-            "tags": {}
+            "tags": {
+            }
         },
-		{
+        {
             "name": "[variables('asName')]",
             "type": "Microsoft.Compute/availabilitySets",
             "location": "[resourceGroup().location]",
@@ -125,7 +126,8 @@
             "sku": {
                 "name": "[variables('asSkuName')]"
             },
-            "tags": {}
+            "tags": {
+            }
         },
         {
             "name": "[variables('diskName')]",
@@ -133,16 +135,17 @@
             "location": "[resourceGroup().location]",
             "apiVersion": "2019-07-01",
             "sku": {
-            "name": "Premium_LRS"
+                "name": "Premium_LRS"
             },
             "properties": {
-            "creationData": {
-                "createOption": "Empty"
+                "creationData": {
+                    "createOption": "Empty"
+                },
+                "diskSizeGB": "[parameters('dataDiskSizeGB')]",
+                "maxShares": "[variables('diskMaxShares')]"
             },
-            "diskSizeGB": "[parameters('dataDiskSizeGB')]",
-            "maxShares": "[variables('diskMaxShares')]"
-            },
-            "tags": {}
+            "tags": {
+            }
         },
         {
             "name": "[variables('witnessStorageName')]",
@@ -153,9 +156,10 @@
                 "name": "[variables('witnessStorageType')]"
             },
             "kind": "Storage",
-            "tags": {}
+            "tags": {
+            }
         },
-		{
+        {
             "name": "[variables('ilbName')]",
             "type": "Microsoft.Network/loadBalancers",
             "location": "[resourceGroup().location]",
@@ -212,7 +216,8 @@
                     }
                 ]
             },
-            "tags": {}
+            "tags": {
+            }
         },
         {
             "name": "[variables('snatPipName')]",
@@ -227,7 +232,8 @@
                 "publicIPAllocationMethod": "Static",
                 "idleTimeoutInMinutes": 4
             },
-            "tags": {}
+            "tags": {
+            }
         },
         {
             "name": "[variables('snatLbName')]",
@@ -256,9 +262,12 @@
                         "name": "bePool0"
                     }
                 ],
-                "loadBalancingRules": [],
-                "probes": [],
-                "inboundNatRules": [],
+                "loadBalancingRules": [
+                ],
+                "probes": [
+                ],
+                "inboundNatRules": [
+                ],
                 "outboundRules": [
                     {
                         "name": "rule0",
@@ -279,45 +288,47 @@
                     }
                 ]
             },
-            "tags": {}
+            "tags": {
+            }
         },
-		{
-			"name": "[concat(parameters('namePrefix'), copyindex(), '-nic')]",
-			"type": "Microsoft.Network/networkInterfaces",
-			"location": "[resourceGroup().location]",
-			"apiVersion": "2019-11-01",
-			"copy": {
-				"name": "nicLoop",
-				"count": "[variables('vmCount')]"
-			},
-			"dependsOn": [
-				"[variables('ilbName')]",
+        {
+            "name": "[concat(parameters('namePrefix'), copyindex(), '-nic')]",
+            "type": "Microsoft.Network/networkInterfaces",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-11-01",
+            "copy": {
+                "name": "nicLoop",
+                "count": "[variables('vmCount')]"
+            },
+            "dependsOn": [
+                "[variables('ilbName')]",
                 "[variables('snatLbName')]"
-			],
-			"properties": {
-				"ipConfigurations": [
-					{
-						"name": "ipconfig0",
-						"properties": {
-							"privateIPAllocationMethod": "Dynamic",
-							"subnet": {
-								"id": "[parameters('subnetUri')]"
-							},
-							"loadBalancerBackendAddressPools": [
-								{
-									"id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/backendAddressPools/bePool0')]"
-								},
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig0",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[parameters('subnetUri')]"
+                            },
+                            "loadBalancerBackendAddressPools": [
                                 {
-									"id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('snatLbName')),'/backendAddressPools/bePool0')]"
-								}
-							]
-						}
-					}
-				],
+                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/backendAddressPools/bePool0')]"
+                                },
+                                {
+                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('snatLbName')),'/backendAddressPools/bePool0')]"
+                                }
+                            ]
+                        }
+                    }
+                ],
                 "enableAcceleratedNetworking": "[parameters('enableAcceleratedNetworking')]"
-			},
-            "tags": {}
-		},
+            },
+            "tags": {
+            }
+        },
         {
             "type": "Microsoft.Compute/virtualMachines",
             "apiVersion": "2019-07-01",
@@ -463,6 +474,7 @@
                 }
             }
         }
-	],
-	"outputs": {}
+    ],
+    "outputs": {
+    }
 }

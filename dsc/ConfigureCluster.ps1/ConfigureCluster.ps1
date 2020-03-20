@@ -31,12 +31,12 @@ configuration ConfigureCluster
         [System.Management.Automation.PSCredential]$WitnessStorageKey
     )
 
-    Import-DscResource -ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, ActiveDirectoryDsc, xFailoverCluster
+    Import-DscResource -ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, ActiveDirectoryDsc
 
     [System.Management.Automation.PSCredential]$DomainCreds = New-Object System.Management.Automation.PSCredential ("$($Admincreds.UserName)@${DomainName}", $Admincreds.Password)
 
     [System.Collections.ArrayList]$Nodes=@()
-    For ($count=0; $count -lt $VMCount; $count++) {
+    For ($count=1; $count -lt $VMCount; $count++) {
         $Nodes.Add($NamePrefix + $Count.ToString())
     }
    
@@ -53,24 +53,21 @@ configuration ConfigureCluster
         {
             Name = "RSAT-Clustering-PowerShell"
             Ensure = "Present"
+            DependsOn = "[WindowsFeature]FC"
         }
 
         WindowsFeature FCCmd
         {
             Name = "RSAT-Clustering-CmdInterface"
             Ensure = "Present"
+            DependsOn = "[WindowsFeature]FCPS"
         }
 
         WindowsFeature ADPS
         {
             Name = "RSAT-AD-PowerShell"
             Ensure = "Present"
-        }
-
-        WindowsFeature FS
-        {
-            Name = "FS-FileServer"
-            Ensure = "Present"
+            DependsOn = "[WindowsFeature]FCCmd"
         }
 
         WaitForADDomain DscForestWait 
@@ -91,11 +88,12 @@ configuration ConfigureCluster
             DependsOn = "[WaitForADDomain]DscForestWait"
         }
 
-        xCluster FailoverCluster
+        Script CreateCluster
         {
-            Name = $ClusterName
-            DomainAdministratorCredential = $DomainCreds
-            Nodes = $Nodes
+            SetScript = "New-Cluster -Name ${ClusterName} -Node ${env:COMPUTERNAME} -NoStorage "
+            TestScript = "(Get-Cluster).Name -eq ${ClusterName}"
+            GetScript = "@{Ensure = if ((Get-Cluster).Name -eq ${ClusterName}) {'Present'} else {'Absent'}}"
+            PsDscRunAsCredential = $DomainCreds
 	        DependsOn = "[Computer]DomainJoin"
         }
 
@@ -104,7 +102,7 @@ configuration ConfigureCluster
             SetScript = "Set-ClusterQuorum -CloudWitness -AccountName ${WitnessStorageName} -AccessKey $($WitnessStorageKey.GetNetworkCredential().Password)"
             TestScript = "(Get-ClusterQuorum).QuorumResource.Name -eq 'Cloud Witness'"
             GetScript = "@{Ensure = if ((Get-ClusterQuorum).QuorumResource.Name -eq 'Cloud Witness') {'Present'} else {'Absent'}}"
-            DependsOn = "[xCluster]FailoverCluster"
+            DependsOn = "[Script]CreateCluster"
         }
 
         Script IncreaseClusterTimeouts
@@ -113,6 +111,18 @@ configuration ConfigureCluster
             TestScript = "(Get-Cluster).SameSubnetDelay -eq 2000 -and (Get-Cluster).SameSubnetThreshold -eq 15 -and (Get-Cluster).CrossSubnetDelay -eq 3000 -and (Get-Cluster).CrossSubnetThreshold -eq 15"
             GetScript = "@{Ensure = if ((Get-Cluster).SameSubnetDelay -eq 2000 -and (Get-Cluster).SameSubnetThreshold -eq 15 -and (Get-Cluster).CrossSubnetDelay -eq 3000 -and (Get-Cluster).CrossSubnetThreshold -eq 15) {'Present'} else {'Absent'}}"
             DependsOn = "[Script]CloudWitness"
+        }
+
+        foreach $Node in $Nodes
+        {
+            Script AddClusterNode
+            {
+                SetScript = "Add-ClusterNode -Name ${Node} -NoStorage"
+                TestScript = "${Node} -in (Get-ClusterNode).Name"
+                GetScript = "@{Ensure = if (${Node} -in (Get-ClusterNode).Name) {'Present'} else {'Absent'}}"
+                PsDscRunAsCredential = $DomainCreds
+                DependsOn = "[Script]IncreaseClusterTimeouts"
+            }
         }
 
         LocalConfigurationManager 

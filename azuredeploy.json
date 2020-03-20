@@ -55,7 +55,7 @@
             "minValue": 256,
             "maxValue": 32767,
             "metadata": {
-                "description": "Size of shared data disk for cluster (Min=128, Max=1023)"
+                "description": "Size of shared data disk for cluster in GB (Min=256, Max=32767)"
             },
             "defaultValue": 1023
         },

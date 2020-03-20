@@ -136,7 +136,7 @@ configuration ConfigureCluster
             SetScript = "Get-Disk | Where-Object PartitionStyle -eq 'RAW' | Initialize-Disk -PartitionStyle GPT -PassThru -ErrorAction SilentlyContinue | New-Partition -AssignDriveLetter -UseMaximumSize -ErrorAction SilentlyContinue | Format-Volume -FileSystem NTFS -Confirm:${false}"
             TestScript = "(Get-Disk | Where-Object PartitionStyle -eq 'RAW').Count -eq 0"
             GetScript = "@{Ensure = if ((Get-Disk | Where-Object PartitionStyle -eq 'RAW').Count -eq 0) {'Present'} else {'Absent'}}"
-            DependsOn = "[Script]AddClusterNode_${Nodes}[-1]"
+            DependsOn = "[Script]CreateCluster"
         }
 
         Script AddClusterDisks

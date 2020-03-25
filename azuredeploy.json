@@ -75,7 +75,7 @@
             "defaultValue": "https://raw.githubusercontent.com/robotechredmond/301-shared-disk-wfc/master"
         },
         "_artifactsLocationSasToken": {
-            "type": "string",
+            "type": "securestring",
             "defaultValue": ""
         }
     },

@@ -22,13 +22,7 @@ configuration ConfigureCluster
         [Int]$VMCount,
 
         [Parameter(Mandatory)]
-        [Int]$DataDiskSizeGB,
-
-        [Parameter(Mandatory)]
-        [String]$WitnessStorageName,
-
-        [Parameter(Mandatory)]
-        [System.Management.Automation.PSCredential]$WitnessStorageKey,
+        [String]$WitnessType,
 
         [Parameter(Mandatory)]
         [String]$ListenerIPAddress,
@@ -36,10 +30,19 @@ configuration ConfigureCluster
         [Parameter(Mandatory)]
         [Int]$ListenerProbePort,
 
+        [Int]$ListenerPortStart,
+
+        [Int]$ListenerPortEnd,
+
+        [Int]$DataDiskSizeGB,
+
+        [String]$WitnessStorageName,
+
+        [System.Management.Automation.PSCredential]$WitnessStorageKey,
+
         [String]$ClusterGroup = "${ClusterName}-group",
 
         [String]$ClusterIPName = "IP Address ${ListenerIPAddress}"
-
     )
 
     Import-DscResource -ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, ActiveDirectoryDsc
@@ -103,27 +106,13 @@ configuration ConfigureCluster
             DependsOn            = "[Computer]DomainJoin"
         }
 
-        Script CloudWitness {
-            SetScript  = "Set-ClusterQuorum -CloudWitness -AccountName ${WitnessStorageName} -AccessKey $($WitnessStorageKey.GetNetworkCredential().Password)"
-            TestScript = "(Get-ClusterQuorum).QuorumResource.Name -eq 'Cloud Witness'"
-            GetScript  = "@{Ensure = if ((Get-ClusterQuorum).QuorumResource.Name -eq 'Cloud Witness') {'Present'} else {'Absent'}}"
-            DependsOn  = "[Script]CreateCluster"
-        }
-
-        Script IncreaseClusterTimeouts {
-            SetScript  = "(Get-Cluster).SameSubnetDelay = 2000; (Get-Cluster).SameSubnetThreshold = 15; (Get-Cluster).CrossSubnetDelay = 3000; (Get-Cluster).CrossSubnetThreshold = 15"
-            TestScript = "(Get-Cluster).SameSubnetDelay -eq 2000 -and (Get-Cluster).SameSubnetThreshold -eq 15 -and (Get-Cluster).CrossSubnetDelay -eq 3000 -and (Get-Cluster).CrossSubnetThreshold -eq 15"
-            GetScript  = "@{Ensure = if ((Get-Cluster).SameSubnetDelay -eq 2000 -and (Get-Cluster).SameSubnetThreshold -eq 15 -and (Get-Cluster).CrossSubnetDelay -eq 3000 -and (Get-Cluster).CrossSubnetThreshold -eq 15) {'Present'} else {'Absent'}}"
-            DependsOn  = "[Script]CloudWitness"
-        }
-
         foreach ($Node in $Nodes) {
             Script "AddClusterNode_${Node}" {
                 SetScript            = "Add-ClusterNode -Name ${Node} -NoStorage"
                 TestScript           = "'${Node}' -in (Get-ClusterNode).Name"
                 GetScript            = "@{Ensure = if ('${Node}' -in (Get-ClusterNode).Name) {'Present'} else {'Absent'}}"
                 PsDscRunAsCredential = $DomainCreds
-                DependsOn            = "[Script]IncreaseClusterTimeouts"
+                DependsOn            = "[Script]CreateCluster"
             }
         }
 
@@ -131,7 +120,7 @@ configuration ConfigureCluster
             SetScript  = "Get-Disk | Where-Object PartitionStyle -eq 'RAW' | Initialize-Disk -PartitionStyle GPT -PassThru -ErrorAction SilentlyContinue | New-Partition -AssignDriveLetter -UseMaximumSize -ErrorAction SilentlyContinue | Format-Volume -FileSystem NTFS -Confirm:`$false"
             TestScript = "(Get-Disk | Where-Object PartitionStyle -eq 'RAW').Count -eq 0"
             GetScript  = "@{Ensure = if ((Get-Disk | Where-Object PartitionStyle -eq 'RAW').Count -eq 0) {'Present'} else {'Absent'}}"
-            DependsOn  = "[Script]CloudWitness"
+            DependsOn  = "[Script]CreateCluster"
         }
 
         Script AddClusterDisks {
@@ -141,11 +130,25 @@ configuration ConfigureCluster
             DependsOn  = "[Script]FormatSharedDisks"
         }
 
+        Script ClusterWitness {
+            SetScript  = "if '${WitnessType}' -eq 'Cloud') { Set-ClusterQuorum -CloudWitness -AccountName ${WitnessStorageName} -AccessKey $($WitnessStorageKey.GetNetworkCredential().Password) } else { Set-ClusterQuorum -DiskWitness `$((Get-ClusterGroup -Name 'Available Storage' | Get-ClusterResource | ? ResourceType -eq 'Physical Disk' | Sort-Object Name | Select-Object -Last 1).Name) }"
+            TestScript = "((Get-ClusterQuorum).QuorumResource).Count -gt 0"
+            GetScript  = "@{Ensure = if (((Get-ClusterQuorum).QuorumResource).Count -gt 0) {'Present'} else {'Absent'}}"
+            DependsOn  = "[Script]AddClusterDisks"
+        }
+
+        Script IncreaseClusterTimeouts {
+            SetScript  = "(Get-Cluster).SameSubnetDelay = 2000; (Get-Cluster).SameSubnetThreshold = 15; (Get-Cluster).CrossSubnetDelay = 3000; (Get-Cluster).CrossSubnetThreshold = 15"
+            TestScript = "(Get-Cluster).SameSubnetDelay -eq 2000 -and (Get-Cluster).SameSubnetThreshold -eq 15 -and (Get-Cluster).CrossSubnetDelay -eq 3000 -and (Get-Cluster).CrossSubnetThreshold -eq 15"
+            GetScript  = "@{Ensure = if ((Get-Cluster).SameSubnetDelay -eq 2000 -and (Get-Cluster).SameSubnetThreshold -eq 15 -and (Get-Cluster).CrossSubnetDelay -eq 3000 -and (Get-Cluster).CrossSubnetThreshold -eq 15) {'Present'} else {'Absent'}}"
+            DependsOn  = "[Script]ClusterWitness"
+        }
+
         Script AddClusterGroup {
             SetScript  = "Add-ClusterGroup -Name '$ClusterGroup'"
             TestScript = "'${ClusterGroup}' -in (Get-ClusterGroup).Name"
             GetScript  = "@{Ensure = if ('${ClusterGroup}' -in (Get-ClusterGroup).Name) {'Present'} else {'Absent'}}"
-            DependsOn  = "[Script]AddClusterDisks"
+            DependsOn  = "[Script]IncreaseClusterTimeouts"
         }
 
         Script AddClusterIPAddress {

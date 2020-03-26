@@ -30,9 +30,7 @@ configuration ConfigureCluster
         [Parameter(Mandatory)]
         [Int]$ListenerProbePort,
 
-        [Int]$ListenerPortStart,
-
-        [Int]$ListenerPortEnd,
+        [Int]$ListenerPort,
 
         [Int]$DataDiskSizeGB,
 

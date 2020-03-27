@@ -112,8 +112,18 @@
         "witnessStorageType": "Standard_LRS",
         "apiVersionStorage": "2019-06-01",
         "ilbName": "[concat(parameters('namePrefix'),'-ilb')]",
-        "ilbListenPortFrontEnd": 80,
-        "ilbListenPortBackEnd": 80,
+        "ilbListenPorts": [
+            {
+                "protocol": "tcp",
+                "frontend": 443,
+                "backend": 443
+            },
+            {
+                "protocol": "tcp",
+                "frontend": 80,
+                "backend": 80
+            }
+        ],
         "ilbProbePort": 59999,
         "snatPipName": "[concat(parameters('namePrefix'),'-snatpip')]",
         "snatLbName": "[concat(parameters('namePrefix'),'-snatlb')]",
@@ -226,23 +236,27 @@
                         "name": "bePool0"
                     }
                 ],
-                "loadBalancingRules": [
+                "copy": [
                     {
-                        "name": "rule0",
-                        "properties": {
-                            "frontendIPConfiguration": {
-                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/frontendIPConfigurations/feIpConfig0')]"
-                            },
-                            "backendAddressPool": {
+                        "name": "loadBalancingRules",
+                        "count": "[length(variables('ilbListenPorts'))]",
+                        "input": {
+                            "name": "[concat('rule',copyIndex('loadBalancingRules'))]",
+                            "properties": {
+                                "frontendIPConfiguration": {
+                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/frontendIPConfigurations/feIpConfig0')]"
+                                },
+                                "backendAddressPool": {
                                 "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/backendAddressPools/bePool0')]"
-                            },
-                            "probe": {
-                                "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/probes/probe0')]"
-                            },
-                            "protocol": "Tcp",
-                            "frontendPort": "[variables('ilbListenPortFrontEnd')]",
-                            "backendPort": "[variables('ilbListenPortBackEnd')]",
-                            "enableFloatingIP": true
+                                },
+                                "probe": {
+                                    "id": "[concat(resourceId('Microsoft.Network/loadBalancers',variables('ilbName')),'/probes/probe0')]"
+                                },
+                                "protocol": "[variables('ilbListenPorts')[copyIndex('loadBalancingRules')].protocol]",
+                                "frontendPort": "[variables('ilbListenPorts')[copyIndex('loadBalancingRules')].frontend]",
+                                "backendPort": "[variables('ilbListenPorts')[copyIndex('loadBalancingRules')].backend]",
+                                "enableFloatingIP": true
+                            }
                         }
                     }
                 ],
@@ -439,7 +453,8 @@
                         "function": "[variables('clusterPrepFunction')]"
                     },
                     "configurationArguments": {
-                        "domainName": "[parameters('domainName')]"
+                        "domainName": "[parameters('domainName')]",
+                        "listenerProbePort": "[variables('ilbProbePort')]"
                     }
                 },
                 "protectedSettings": {
@@ -484,7 +499,7 @@
                         "witnessStorageName": "[if(equals(parameters('witnessType'),'Cloud'),variables('witnessStorageName'),'')]",
                         "listenerIPAddress": "[reference(variables('ilbName')).frontendIPConfigurations[0].properties.privateIPAddress]",
                         "listenerProbePort": "[variables('ilbProbePort')]",
-                        "listenerPort": "[variables('ilbListenPortBackEnd')]"
+                        "listenerPort": "[variables('ilbListenPorts')[0].backend]"
                     }
                 },
                 "protectedSettings": {

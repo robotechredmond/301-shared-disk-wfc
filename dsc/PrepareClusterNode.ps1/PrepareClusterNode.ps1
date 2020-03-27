@@ -10,7 +10,10 @@ configuration PrepareClusterNode
         [String]$DomainName,
 
         [Parameter(Mandatory)]
-        [System.Management.Automation.PSCredential]$AdminCreds
+        [System.Management.Automation.PSCredential]$AdminCreds,
+
+        [Parameter(Mandatory)]
+        [Int]$ListenerProbePort
     )
 
     Import-DscResource -ModuleName PSDesiredStateConfiguration, ComputerManagementDsc, ActiveDirectoryDsc
@@ -59,6 +62,13 @@ configuration PrepareClusterNode
             DomainName = $DomainName
             Credential = $DomainCreds
             DependsOn = "[WaitForADDomain]DscForestWait"
+        }
+
+        Script FirewallRuleProbePort {
+            SetScript  = "Remove-NetFirewallRule -DisplayName 'Failover Cluster - Probe Port' -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName 'Failover Cluster - Probe Port' -Profile Domain -Direction Inbound -Action Allow -Enabled True -Protocol 'tcp' -LocalPort ${ListenerProbePort}"
+            TestScript = "(Get-NetFirewallRule -DisplayName 'Failover Cluster - Probe Port' -ErrorAction SilentlyContinue | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue).LocalPort -eq ${ListenerProbePort}"
+            GetScript  = "@{Ensure = if ((Get-NetFirewallRule -DisplayName 'Failover Cluster - Probe Port' -ErrorAction SilentlyContinue | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue).LocalPort -eq ${ListenerProbePort}) {'Present'} else {'Absent'}}"
+            DependsOn  = "[Computer]DomainJoin"
         }
 
         LocalConfigurationManager 
